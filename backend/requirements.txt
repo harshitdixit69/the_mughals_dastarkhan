@@ -13,3 +13,4 @@ python-jose>=3.3.0
 requests>=2.31.0
 python-multipart>=0.0.9
 razorpay==1.4.2
+certifi>=2024.2.2
