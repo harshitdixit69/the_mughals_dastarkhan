@@ -4,7 +4,6 @@ Payment routes - Razorpay order creation & signature verification
 import uuid
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-import razorpay
 
 from auth import get_current_user
 from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
@@ -18,6 +17,10 @@ payments_router = APIRouter(prefix="/payments", tags=["payments"])
 def _get_client():
     if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
         raise HTTPException(status_code=500, detail="Razorpay keys not configured")
+    try:
+        import razorpay
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Razorpay SDK not available")
     return razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 
