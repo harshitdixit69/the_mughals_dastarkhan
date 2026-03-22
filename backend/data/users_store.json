@@ -1,0 +1,47 @@
+[
+  {
+    "id": "036b6cb3-9d0e-4c71-8fb4-cf4d39de95c8",
+    "name": "Demo User",
+    "email": "demo@mughals.com",
+    "phone": "+91 98765 43210",
+    "password_hash": "$2b$12$A2igsSuwutsGFxu12ZgbdejXrKA9L9Www6X0aziB0fY7ropuYYMvq",
+    "favorite_items": [],
+    "created_at": "2026-03-20T22:44:21.430954+00:00"
+  },
+  {
+    "id": "82bea450-46c8-45c3-9044-53b9fe5d706a",
+    "name": "Harsh Dixit",
+    "email": "harsh@test.com",
+    "phone": "9999900000",
+    "password_hash": "$2b$12$rWiAWYV1C2UAqPzoUKCK9OKASBxi9wc/sB34U51/O.zxyBkgOmQ4K",
+    "favorite_items": [],
+    "created_at": "2026-03-20T22:46:41.660949+00:00"
+  },
+  {
+    "id": "d9eba5c8-096a-4bf9-bada-98ed98543e33",
+    "name": "sam",
+    "email": "sam65@gmail.com",
+    "phone": "",
+    "password_hash": "$2b$12$c6LRGG19aTdEGrcdB3nPNu9KS1jejJmd0nHjwISuZPTWS6T6J2Tuy",
+    "favorite_items": [],
+    "created_at": "2026-03-20T22:48:12.179593+00:00"
+  },
+  {
+    "id": "69db2d98-344c-4ace-8d22-6bfe86a27bd3",
+    "name": "wilsonsam",
+    "email": "wilson65@gmail.com",
+    "phone": "",
+    "password_hash": "$2b$12$LCPnV8/8G05cAw3fn0d.xuk1A62yc7AhDgk1.YPqmbniyrsha2cqy",
+    "favorite_items": [],
+    "created_at": "2026-03-20T23:00:08.138272+00:00"
+  },
+  {
+    "id": "1c54b9c9-0d8f-4ceb-a5d8-9689e4f09d5f",
+    "name": "sam",
+    "email": "sam@gmail.com",
+    "phone": "+919569765152",
+    "password_hash": "$2b$12$.5Pi.UUMEhj.WGOO8PSSmeL02rl5.5lg0Ibe3BIZj5boAX4w1hX.O",
+    "favorite_items": [],
+    "created_at": "2026-03-21T22:28:27.669747+00:00"
+  }
+]
