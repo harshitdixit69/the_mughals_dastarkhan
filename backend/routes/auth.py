@@ -5,7 +5,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
-from models import UserRegister, UserLogin, TokenResponse, UserResponse
+from models import UserRegister, UserLogin, UserProfileUpdate, TokenResponse, UserResponse, SavedAddress
 from auth import (
     hash_password, verify_password, create_access_token, get_current_user,
     add_to_users_store, user_exists_in_store, get_user_from_store
@@ -42,6 +42,7 @@ async def register(user_data: UserRegister):
             'phone': user_data.phone,
             'password_hash': password_hash,
             'favorite_items': [],
+            'addresses': [],
             'created_at': created_at.isoformat()
         }
         
@@ -64,6 +65,7 @@ async def register(user_data: UserRegister):
                 phone=user_data.phone,
                 role=None,
                 favorite_items=[],
+                addresses=[],
                 created_at=created_at
             )
         )
@@ -104,6 +106,7 @@ async def login(user_data: UserLogin):
                 phone=user.get('phone'),
                 role=user.get('role'),
                 favorite_items=user.get('favorite_items', []),
+                addresses=user.get('addresses', []),
                 created_at=created_at
             )
         )
@@ -128,8 +131,67 @@ async def get_profile(current_user: dict = Depends(get_current_user)):
         phone=current_user.get('phone'),
         role=current_user.get('role'),
         favorite_items=current_user.get('favorite_items', []),
+        addresses=current_user.get('addresses', []),
         created_at=created_at
     )
+
+
+@auth_router.put("/me", response_model=UserResponse)
+async def update_profile(update_data: UserProfileUpdate, current_user: dict = Depends(get_current_user)):
+    """Update current user profile (name, phone, addresses)"""
+    try:
+        updates = {}
+        if update_data.name is not None:
+            updates['name'] = update_data.name
+        if update_data.phone is not None:
+            updates['phone'] = update_data.phone
+        if update_data.addresses is not None:
+            import uuid as _uuid
+            addresses_list = []
+            for addr in update_data.addresses:
+                addr_dict = addr.model_dump()
+                if not addr_dict.get('id'):
+                    addr_dict['id'] = str(_uuid.uuid4())[:8]
+                addresses_list.append(addr_dict)
+            updates['addresses'] = addresses_list
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        if is_mongo_available():
+            db = get_db()
+            await db.users.update_one({'id': current_user['id']}, {'$set': updates})
+            updated_user = await db.users.find_one({'id': current_user['id']})
+        else:
+            from auth import get_all_users_store
+            updated_user = None
+            for user in get_all_users_store():
+                if user['id'] == current_user['id']:
+                    user.update(updates)
+                    updated_user = user
+                    break
+            if not updated_user:
+                raise HTTPException(status_code=404, detail="User not found")
+
+        created_at = updated_user.get('created_at')
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+
+        return UserResponse(
+            id=updated_user['id'],
+            name=updated_user['name'],
+            email=updated_user['email'],
+            phone=updated_user.get('phone'),
+            role=updated_user.get('role'),
+            favorite_items=updated_user.get('favorite_items', []),
+            addresses=updated_user.get('addresses', []),
+            created_at=created_at
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating profile: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update profile")
 
 
 @auth_router.post("/favorites/{item_id}")

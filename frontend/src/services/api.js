@@ -63,6 +63,11 @@ export const authApi = {
     const response = await apiClient.get('/auth/me');
     return response.data;
   },
+
+  updateProfile: async (data) => {
+    const response = await apiClient.put('/auth/me', data);
+    return response.data;
+  },
   
   addFavorite: async (itemId) => {
     const response = await apiClient.post(`/auth/favorites/${itemId}`);
@@ -293,10 +298,18 @@ export const loyaltyApi = {
     return response.data;
   },
 
-  validateCoupon: async (couponCode, orderAmount) => {
-    const response = await apiClient.post('/auth/loyalty/validate-coupon', {
-      coupon_code: couponCode,
-      order_amount: orderAmount
+  validateCoupon: async (couponCode, orderAmount, source = null) => {
+    const payload = { coupon_code: couponCode, order_amount: orderAmount };
+    if (source) payload.source = source;
+    const response = await apiClient.post('/auth/loyalty/validate-coupon', payload);
+    return response.data;
+  },
+
+  autoApplyDirect: async (orderAmount) => {
+    const response = await apiClient.post('/auth/loyalty/auto-apply-direct', {
+      coupon_code: 'DIRECT10',
+      order_amount: orderAmount,
+      source: 'website'
     });
     return response.data;
   },
@@ -329,6 +342,41 @@ export const notificationsApi = {
   },
 };
 
+// Delivery API
+export const deliveryApi = {
+  estimate: async (distanceKm = 2.0) => {
+    const response = await apiClient.post('/auth/delivery/estimate', { distance_km: distanceKm });
+    return response.data;
+  },
+
+  book: async (orderId, partner, deliveryAddress, deliveryNote) => {
+    const response = await apiClient.post('/auth/delivery/book', {
+      order_id: orderId,
+      partner,
+      delivery_address: deliveryAddress,
+      delivery_note: deliveryNote,
+    });
+    return response.data;
+  },
+
+  track: async (trackingId) => {
+    const response = await apiClient.get(`/auth/delivery/track/${trackingId}`);
+    return response.data;
+  },
+
+  updateStatus: async (trackingId, status) => {
+    const response = await apiClient.put(`/auth/delivery/status/${trackingId}`, null, {
+      params: { status },
+    });
+    return response.data;
+  },
+
+  getPartners: async () => {
+    const response = await apiClient.get('/auth/delivery/partners');
+    return response.data;
+  },
+};
+
 // Orders API (for admin)
 export const ordersApi = {
   getOrders: async () => {
@@ -341,10 +389,31 @@ export const ordersApi = {
     return response.data;
   },
 
-  updateOrderStatus: async (orderId, status) => {
+  updateOrderStatus: async (orderId, status, note = null) => {
+    const response = await apiClient.patch(`/auth/orders/${orderId}/status`, {
+      status,
+      note,
+    });
+    return response.data;
+  },
+
+  // Legacy PUT endpoint (backward compat)
+  updateOrderStatusLegacy: async (orderId, status) => {
     const response = await apiClient.put(`/auth/orders/${orderId}`, null, {
       params: { status }
     });
+    return response.data;
+  },
+
+  assignAgent: async (orderId, agentId) => {
+    const response = await apiClient.patch(`/auth/orders/${orderId}/assign-agent`, {
+      agent_id: agentId,
+    });
+    return response.data;
+  },
+
+  assignDelivery: async (orderId, deliveryData) => {
+    const response = await apiClient.patch(`/auth/orders/${orderId}/assign-delivery`, deliveryData);
     return response.data;
   },
 
@@ -355,6 +424,59 @@ export const ordersApi = {
 
   cancelOrder: async (orderId) => {
     const response = await apiClient.delete(`/auth/orders/${orderId}`);
+    return response.data;
+  },
+};
+
+// Delivery Agents API
+export const deliveryAgentsApi = {
+  // Admin endpoints
+  createAgent: async (agentData) => {
+    const response = await apiClient.post('/auth/delivery-agents', agentData);
+    return response.data;
+  },
+
+  listAgents: async () => {
+    const response = await apiClient.get('/auth/delivery-agents');
+    return response.data;
+  },
+
+  listAvailableAgents: async () => {
+    const response = await apiClient.get('/auth/delivery-agents/available');
+    return response.data;
+  },
+
+  updateAgent: async (agentId, updateData) => {
+    const response = await apiClient.put(`/auth/delivery-agents/${agentId}`, updateData);
+    return response.data;
+  },
+
+  deactivateAgent: async (agentId) => {
+    const response = await apiClient.delete(`/auth/delivery-agents/${agentId}`);
+    return response.data;
+  },
+
+  // Delivery agent self-service endpoints
+  getMyOrders: async () => {
+    const response = await apiClient.get('/auth/delivery-agents/my-orders');
+    return response.data;
+  },
+
+  acceptOrder: async (orderId) => {
+    const response = await apiClient.post(`/auth/delivery-agents/accept-order/${orderId}`);
+    return response.data;
+  },
+
+  rejectOrder: async (orderId) => {
+    const response = await apiClient.post(`/auth/delivery-agents/reject-order/${orderId}`);
+    return response.data;
+  },
+
+  updateDeliveryStatus: async (orderId, status, note = null) => {
+    const response = await apiClient.post(`/auth/delivery-agents/update-delivery/${orderId}`, {
+      status,
+      note,
+    });
     return response.data;
   },
 };

@@ -114,9 +114,30 @@ async def initialize_collections():
                     'current_uses': 0, 'is_active': True, 'expiry_date': None,
                     'created_at': datetime.now(timezone.utc).isoformat()
                 },
+                {
+                    'id': str(uuid.uuid4()), 'code': 'DIRECT10', 'discount_type': 'percentage',
+                    'discount_value': 10, 'min_order_amount': 0, 'max_uses': 999999,
+                    'current_uses': 0, 'is_active': True, 'expiry_date': None,
+                    'coupon_type': 'direct_only',
+                    'created_at': datetime.now(timezone.utc).isoformat()
+                },
             ]
             await db.coupons.insert_many(sample_coupons)
             logger.info(f"Initialized {len(sample_coupons)} sample coupons")
+        
+        # Ensure DIRECT10 coupon exists (even if coupons were already seeded)
+        direct_coupon = await db.coupons.find_one({'code': 'DIRECT10'})
+        if not direct_coupon:
+            import uuid as _uuid
+            from datetime import datetime as _dt, timezone as _tz
+            await db.coupons.insert_one({
+                'id': str(_uuid.uuid4()), 'code': 'DIRECT10', 'discount_type': 'percentage',
+                'discount_value': 10, 'min_order_amount': 0, 'max_uses': 999999,
+                'current_uses': 0, 'is_active': True, 'expiry_date': None,
+                'coupon_type': 'direct_only',
+                'created_at': _dt.now(_tz.utc).isoformat()
+            })
+            logger.info("Inserted DIRECT10 coupon for direct website orders")
     
     except Exception as e:
         logger.error(f"Error initializing database collections: {e}")

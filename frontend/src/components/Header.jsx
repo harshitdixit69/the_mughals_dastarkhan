@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, Phone, Clock, MapPin, LogOut, User, ShoppingCart, Calendar, Gift, BarChart3 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Menu, X, Phone, Clock, MapPin, LogOut, User, ShoppingCart, Calendar, Gift, BarChart3, Truck } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import { cartApi, restaurantApi } from '../services/api';
 import { scrollToElement } from '../lib/smoothScroll';
 import { safeGetJSON } from '../lib/safeStorage';
 
-const Header = () => {
+const Header = ({ hideNav }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [user, setUser] = useState(null);
@@ -14,6 +14,7 @@ const Header = () => {
   const [cartBounce, setCartBounce] = useState(false);
   const [restaurantInfo, setRestaurantInfo] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const abortRef = useRef(null);
   const scrollTicking = useRef(false);
   const bounceTimer = useRef(null);
@@ -89,9 +90,15 @@ const Header = () => {
   ];
 
   const scrollToSection = useCallback((href) => {
-    scrollToElement(href);
     setIsMenuOpen(false);
-  }, []);
+    if (location.pathname !== '/') {
+      // Navigate to home first, then scroll after page renders
+      navigate('/');
+      setTimeout(() => scrollToElement(href), 150);
+    } else {
+      scrollToElement(href);
+    }
+  }, [location.pathname, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -144,6 +151,15 @@ const Header = () => {
                     Admin
                   </button>
                 )}
+                {user?.role === 'delivery_agent' && (
+                  <button
+                    onClick={() => navigate('/delivery-dashboard')}
+                    className="flex items-center gap-1 hover:text-[#ECEC75] transition-colors text-xs"
+                  >
+                    <Truck className="w-4 h-4" />
+                    Deliveries
+                  </button>
+                )}
                 <button
                   onClick={() => navigate('/profile')}
                   className="flex items-center gap-1 hover:text-[#ECEC75] transition-colors text-xs"
@@ -173,7 +189,7 @@ const Header = () => {
       </div>
 
       {/* Main Header */}
-      <header
+      {!hideNav && <header
         className={`sticky top-0 z-50 transition-all duration-300 ${
           isScrolled
             ? 'bg-white/95 backdrop-blur-md shadow-md'
@@ -228,7 +244,7 @@ const Header = () => {
                 Order Now
               </Button>
               <a
-                href="https://www.zomato.com"
+                href="https://www.zomato.com/lucknow/dastarkhwan-1-kaiserbagh/order"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 bg-white hover:bg-red-50 border border-red-200 px-3 py-2 rounded-md font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
@@ -237,7 +253,7 @@ const Header = () => {
                 <span className="text-red-600 text-sm">Zomato</span>
               </a>
               <a
-                href="https://www.swiggy.com"
+                href="https://www.swiggy.com/city/lucknow/mughlai-dastarkhwan-mulayam-nagar-gomti-nagar-rest610859"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 bg-white hover:bg-orange-50 border border-orange-200 px-3 py-2 rounded-md font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
@@ -329,9 +345,27 @@ const Header = () => {
               <Calendar className="w-5 h-5" />
               Reservation
             </button>
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => { navigate('/admin'); setIsMenuOpen(false); }}
+                className="flex items-center gap-2 w-full text-[#0f172a] hover:text-[#64748b] font-medium py-2 transition-colors duration-200"
+              >
+                <BarChart3 className="w-5 h-5" />
+                Admin Dashboard
+              </button>
+            )}
+            {user?.role === 'delivery_agent' && (
+              <button
+                onClick={() => { navigate('/delivery-dashboard'); setIsMenuOpen(false); }}
+                className="flex items-center gap-2 w-full text-[#0f172a] hover:text-[#64748b] font-medium py-2 transition-colors duration-200"
+              >
+                <Truck className="w-5 h-5" />
+                My Deliveries
+              </button>
+            )}
           </nav>
         </div>
-      </header>
+      </header>}
     </>
   );
 };

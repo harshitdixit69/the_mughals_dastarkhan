@@ -30,6 +30,8 @@ from routes.contact import contact_router
 from routes.reservations import reservations_router
 from routes.reviews import reviews_router
 from routes.loyalty import loyalty_router
+from routes.delivery import delivery_router
+from routes.delivery_agents import delivery_agents_router
 from routes.notifications import notifications_router
 from routes.payments import payments_router
 
@@ -160,6 +162,12 @@ app.include_router(notifications_router, prefix="/api/auth")
 
 # Payment routes
 app.include_router(payments_router, prefix="/api/auth")
+
+# Delivery routes
+app.include_router(delivery_router, prefix="/api/auth")
+
+# Delivery Agent routes
+app.include_router(delivery_agents_router, prefix="/api/auth")
 
 # Contact routes
 app.include_router(contact_router, prefix="/api")

@@ -64,6 +64,19 @@ coupon_store: List[dict] = [
         'expiry_date': None,
         'created_at': datetime.now(timezone.utc).isoformat()
     },
+    {
+        'id': str(uuid.uuid4()),
+        'code': 'DIRECT10',
+        'discount_type': 'percentage',
+        'discount_value': 10,
+        'min_order_amount': 0,
+        'max_uses': 999999,
+        'current_uses': 0,
+        'is_active': True,
+        'expiry_date': None,
+        'coupon_type': 'direct_only',
+        'created_at': datetime.now(timezone.utc).isoformat()
+    },
 ]
 points_transaction_store: List[dict] = []
 
@@ -283,7 +296,9 @@ async def get_available_coupons(current_user: dict = Depends(get_current_user)):
                 'min_order_amount': c.get('min_order_amount', 0),
                 'description': f"{'%' if c['discount_type'] == 'percentage' else '₹'} off on orders above ₹{c.get('min_order_amount', 0)}"
             }
-            for c in coupons if c.get('current_uses', 0) < c.get('max_uses', float('inf'))
+            for c in coupons
+            if c.get('current_uses', 0) < c.get('max_uses', float('inf'))
+            and c.get('coupon_type') != 'direct_only'
         ]
     except Exception as e:
         logger.error(f"Error fetching coupons: {e}")
@@ -318,6 +333,12 @@ async def validate_coupon(payload: CouponValidation, current_user: dict = Depend
         if coupon.get('expiry_date') and coupon['expiry_date'] < datetime.now(timezone.utc).isoformat():
             raise HTTPException(status_code=400, detail="Coupon has expired")
         
+        # direct_only coupons require source=website
+        if coupon.get('coupon_type') == 'direct_only':
+            source = getattr(payload, 'source', None)
+            if source != 'website':
+                raise HTTPException(status_code=400, detail="This coupon is only valid for direct website orders")
+
         # Calculate discount
         if coupon['discount_type'] == 'percentage':
             discount = int((order_amount * coupon['discount_value']) / 100)
@@ -336,6 +357,42 @@ async def validate_coupon(payload: CouponValidation, current_user: dict = Depend
     except Exception as e:
         logger.error(f"Error validating coupon: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@loyalty_router.post("/auto-apply-direct")
+async def auto_apply_direct_discount(payload: CouponValidation, current_user: dict = Depends(get_current_user)):
+    """Auto-apply the DIRECT10 coupon for website orders"""
+    try:
+        order_amount = payload.order_amount
+
+        if is_mongo_available():
+            db = get_db()
+            coupon = await db.coupons.find_one({'coupon_type': 'direct_only', 'is_active': True})
+        else:
+            coupon = next((c for c in coupon_store if c.get('coupon_type') == 'direct_only' and c['is_active']), None)
+
+        if not coupon:
+            return {'applied': False, 'reason': 'No direct order discount available'}
+
+        if coupon.get('min_order_amount', 0) > order_amount:
+            return {'applied': False, 'reason': f"Minimum order ₹{coupon['min_order_amount']} required"}
+
+        if coupon['discount_type'] == 'percentage':
+            discount = int((order_amount * coupon['discount_value']) / 100)
+        else:
+            discount = coupon['discount_value']
+
+        return {
+            'applied': True,
+            'code': coupon['code'],
+            'discount_amount': discount,
+            'discount_value': coupon['discount_value'],
+            'discount_type': coupon['discount_type'],
+            'final_amount': max(0, order_amount - discount)
+        }
+    except Exception as e:
+        logger.error(f"Error auto-applying direct discount: {e}")
+        return {'applied': False, 'reason': 'Error applying discount'}
 
 
 # ============ ADMIN ENDPOINTS ============

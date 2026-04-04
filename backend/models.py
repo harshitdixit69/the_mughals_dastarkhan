@@ -2,8 +2,32 @@
 Pydantic models for request/response validation
 """
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
+
+
+# ============== ORDER STATUS PIPELINE ==============
+
+ORDER_STATUSES = [
+    'placed', 'accepted', 'preparing', 'ready', 'ready_for_pickup',
+    'assigned', 'accepted_by_agent', 'picked_up',
+    'out_for_delivery', 'delivered', 'cancelled'
+]
+
+# Valid status transitions: current_status -> [allowed_next_statuses]
+STATUS_TRANSITIONS: Dict[str, List[str]] = {
+    'placed': ['accepted', 'cancelled'],
+    'accepted': ['preparing', 'cancelled'],
+    'preparing': ['ready', 'ready_for_pickup', 'cancelled'],
+    'ready': ['assigned', 'delivered', 'cancelled'],           # delivered for dine-in, assigned for delivery
+    'ready_for_pickup': ['delivered', 'cancelled'],             # pickup orders collected by customer
+    'assigned': ['accepted_by_agent', 'picked_up', 'ready', 'cancelled'],  # picked_up if no agent flow, ready if agent declines
+    'accepted_by_agent': ['picked_up', 'cancelled'],
+    'picked_up': ['out_for_delivery'],
+    'out_for_delivery': ['delivered'],
+    'delivered': [],
+    'cancelled': [],
+}
 
 
 # ============== CONTACT MESSAGE MODELS ==============
@@ -47,6 +71,20 @@ class UserLogin(BaseModel):
     password: str
 
 
+class SavedAddress(BaseModel):
+    id: Optional[str] = None
+    label: str = Field(..., min_length=1, max_length=50)  # e.g. "Home", "Work"
+    address: str = Field(..., min_length=5, max_length=500)
+    landmark: Optional[str] = Field(None, max_length=200)
+    is_default: bool = False
+
+
+class UserProfileUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    addresses: Optional[List[SavedAddress]] = None
+
+
 class UserResponse(BaseModel):
     id: str
     name: str
@@ -54,6 +92,7 @@ class UserResponse(BaseModel):
     phone: Optional[str]
     role: Optional[str] = None
     favorite_items: List[int] = Field(default_factory=list)
+    addresses: List[SavedAddress] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -81,6 +120,12 @@ class OrderCreate(BaseModel):
     coupon_code: Optional[str] = Field(None, max_length=20)
     discount_amount: Optional[int] = Field(default=0, ge=0)
     payment_method: Optional[str] = Field(default="cod", max_length=30)
+    # Delivery fields
+    delivery_type: Optional[str] = Field(default=None, max_length=30)  # pickup, self_delivery, external_delivery
+    delivery_partner: Optional[str] = Field(default=None, max_length=30)  # dunzo, porter, shadowfax
+    delivery_charge: Optional[int] = Field(default=0, ge=0)
+    delivery_address: Optional[str] = Field(None, max_length=500)
+    delivery_note: Optional[str] = Field(None, max_length=300)
 
 
 class Order(BaseModel):
@@ -96,6 +141,22 @@ class Order(BaseModel):
     coupon_code: Optional[str] = None
     discount_amount: Optional[int] = 0
     payment_method: Optional[str] = None
+    delivery_type: Optional[str] = None
+    delivery_partner: Optional[str] = None
+    delivery_charge: Optional[int] = 0
+    delivery_address: Optional[str] = None
+    delivery_note: Optional[str] = None
+    delivery_status: Optional[str] = None
+    delivery_tracking_id: Optional[str] = None
+    delivery_agent_id: Optional[str] = None
+    delivery_agent_name: Optional[str] = None
+    # Porter / manual delivery fields
+    driver_name: Optional[str] = None
+    driver_phone: Optional[str] = None
+    status_history: List[dict] = Field(default_factory=list)
+    accepted_at: Optional[str] = None
+    picked_up_at: Optional[str] = None
+    delivered_at: Optional[str] = None
     created_at: datetime
 
 
@@ -269,6 +330,7 @@ class PointsTransaction(BaseModel):
 class CouponValidation(BaseModel):
     coupon_code: str = Field(..., min_length=3, max_length=20)
     order_amount: int = Field(..., ge=0)
+    source: Optional[str] = None  # "website" for direct orders
 
 
 class LoyaltyAddPoints(BaseModel):
@@ -281,6 +343,53 @@ class PromotionalEmailRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=200)
     content: str = Field(..., min_length=10, max_length=2000)
     offer_code: Optional[str] = Field(None, max_length=20)
+
+
+# ============== DELIVERY AGENT MODELS ==============
+
+class DeliveryAgentCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    phone: str = Field(..., min_length=10, max_length=15)
+    email: EmailStr
+    vehicle_type: str = Field(default="bike", max_length=30)  # bike, scooter, car
+
+
+class DeliveryAgent(BaseModel):
+    id: str
+    name: str
+    phone: str
+    email: str
+    vehicle_type: str = "bike"
+    is_available: bool = True
+    is_active: bool = True
+    current_order_id: Optional[str] = None
+    total_deliveries: int = 0
+    created_at: datetime
+
+
+class DeliveryAgentUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    phone: Optional[str] = Field(None, min_length=10, max_length=15)
+    vehicle_type: Optional[str] = Field(None, max_length=30)
+    is_available: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class StatusUpdateRequest(BaseModel):
+    status: str = Field(..., description="New status for the order")
+    note: Optional[str] = Field(None, max_length=300)
+
+
+class AgentAssignRequest(BaseModel):
+    agent_id: str = Field(..., description="ID of the delivery agent to assign")
+
+
+class DeliveryAssignRequest(BaseModel):
+    """Manual delivery assignment (Porter etc.)"""
+    delivery_partner: str = Field(default="porter", max_length=30)
+    tracking_id: Optional[str] = Field(None, max_length=100)
+    driver_name: str = Field(..., min_length=2, max_length=100)
+    driver_phone: str = Field(..., min_length=10, max_length=15)
 
 
 # ============== RESTAURANT INFO MODELS ==============
