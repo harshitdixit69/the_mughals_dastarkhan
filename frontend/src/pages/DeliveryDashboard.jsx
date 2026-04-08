@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { deliveryAgentsApi } from '../services/api';
-import { Truck, CheckCircle, XCircle, Package, MapPin, RefreshCw, Clock } from 'lucide-react';
+import { Truck, CheckCircle, XCircle, Package, MapPin, RefreshCw, Clock, Navigation } from 'lucide-react';
 
 const STATUS_LABELS = {
   placed: 'Placed', accepted: 'Accepted', preparing: 'Preparing',
@@ -30,7 +30,9 @@ const DeliveryDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [sharingLocation, setSharingLocation] = useState(false);
   const pollRef = useRef(null);
+  const geoWatchRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -65,6 +67,48 @@ const DeliveryDashboard = () => {
     pollRef.current = setInterval(fetchData, 10000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchData]);
+
+  // Share GPS location while there are active delivery orders
+  useEffect(() => {
+    const deliveryStatuses = ['accepted_by_agent', 'picked_up', 'out_for_delivery'];
+    const activeDeliveryOrders = orders.filter(o => deliveryStatuses.includes(o.status));
+
+    if (activeDeliveryOrders.length === 0) {
+      if (geoWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(geoWatchRef.current);
+        geoWatchRef.current = null;
+        setSharingLocation(false);
+      }
+      return;
+    }
+
+    if (geoWatchRef.current !== null) return; // Already watching
+
+    if (!navigator.geolocation) return;
+
+    setSharingLocation(true);
+    geoWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        // Send location for all active delivery orders
+        activeDeliveryOrders.forEach(order => {
+          deliveryAgentsApi.updateDriverLocation(order.id, latitude, longitude).catch(() => {});
+        });
+      },
+      (err) => {
+        console.warn('Geolocation error:', err.message);
+        setSharingLocation(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+
+    return () => {
+      if (geoWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(geoWatchRef.current);
+        geoWatchRef.current = null;
+      }
+    };
+  }, [orders]);
 
   const handleAcceptOrder = async (orderId) => {
     try {
@@ -146,6 +190,12 @@ const DeliveryDashboard = () => {
             <Button onClick={fetchData} variant="outline" size="sm">
               <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh
             </Button>
+            {sharingLocation && (
+              <div className="flex items-center gap-1.5 text-xs text-green-600 bg-green-50 px-2.5 py-1.5 rounded-full">
+                <Navigation className="w-3 h-3 animate-pulse" />
+                GPS Live
+              </div>
+            )}
           </div>
         </div>
 

@@ -17,6 +17,70 @@ reservations_router = APIRouter(prefix="/reservations", tags=["reservations"])
 # In-memory storage for reservations (when MongoDB is not available)
 reservations_store: List[dict] = []
 
+# Restaurant operating hours for reservations
+RESERVATION_SLOTS = [
+    "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+    "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30"
+]
+MAX_TABLES_PER_SLOT = 10
+
+
+@reservations_router.get("/slots/{date}")
+async def get_available_slots(date: str):
+    """Get time slot availability for a given date (public endpoint)"""
+    try:
+        # Validate date format
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+        today = datetime.now().date()
+        if target_date < today:
+            raise HTTPException(status_code=400, detail="Cannot check slots for past dates")
+
+        # Count reservations per slot
+        slot_counts = {}
+        if is_mongo_available():
+            db = get_db()
+            pipeline = [
+                {"$match": {"date": date, "status": {"$ne": "cancelled"}}},
+                {"$group": {"_id": "$time", "count": {"$sum": 1}}}
+            ]
+            async for doc in db.reservations.aggregate(pipeline):
+                slot_counts[doc["_id"]] = doc["count"]
+        else:
+            for r in reservations_store:
+                if r["date"] == date and r["status"] != "cancelled":
+                    slot_counts[r["time"]] = slot_counts.get(r["time"], 0) + 1
+
+        now = datetime.now()
+        slots = []
+        for slot_time in RESERVATION_SLOTS:
+            booked = slot_counts.get(slot_time, 0)
+            available = MAX_TABLES_PER_SLOT - booked
+
+            # Mark past slots as unavailable for today
+            is_past = False
+            if target_date == today:
+                slot_dt = datetime.strptime(f"{date} {slot_time}", "%Y-%m-%d %H:%M")
+                if slot_dt <= now:
+                    is_past = True
+
+            slots.append({
+                "time": slot_time,
+                "available": max(0, available) if not is_past else 0,
+                "total": MAX_TABLES_PER_SLOT,
+                "status": "past" if is_past else ("full" if available <= 0 else ("few_left" if available <= 3 else "available"))
+            })
+
+        return {"date": date, "slots": slots}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching slot availability: {e}")
+        raise HTTPException(status_code=500, detail="Failed to check slot availability")
+
 
 @reservations_router.post("", response_model=ReservationResponse)
 async def create_reservation(reservation_data: ReservationCreate, current_user: dict = Depends(get_current_user)):

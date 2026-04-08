@@ -13,6 +13,7 @@ import ReservationPage from "./pages/ReservationPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import LoyaltyPage from "./pages/LoyaltyPage";
 import DeliveryDashboard from "./pages/DeliveryDashboard";
+import ChatWidget from "./components/ChatWidget";
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
           </Routes>
         </BrowserRouter>
         <Toaster position="top-right" richColors />
+        <ChatWidget />
       </div>
     </ErrorBoundary>
   );

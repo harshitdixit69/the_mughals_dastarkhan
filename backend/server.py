@@ -34,6 +34,7 @@ from routes.delivery import delivery_router
 from routes.delivery_agents import delivery_agents_router
 from routes.notifications import notifications_router
 from routes.payments import payments_router
+from routes.chat import chat_router
 
 # Configure logging
 logging.basicConfig(
@@ -55,10 +56,10 @@ uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # Add CORS middleware
+print(f"[CORS] Allowed origins: {CORS_ORIGINS}")
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -169,6 +170,13 @@ app.include_router(delivery_router, prefix="/api/auth")
 # Delivery Agent routes
 app.include_router(delivery_agents_router, prefix="/api/auth")
 
+# AI Chat routes
+app.include_router(chat_router, prefix="/api/auth")
+
+# Public AI Chat (no auth needed for /api/chat/quick)
+from routes.chat import chat_router as chat_router_public
+app.include_router(chat_router_public, prefix="/api")
+
 # Contact routes
 app.include_router(contact_router, prefix="/api")
 
@@ -189,7 +197,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "server:app",
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=8000,
         reload=True,
         log_level="info"

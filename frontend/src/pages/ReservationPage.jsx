@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { reservationsApi } from '../services/api';
-import { Calendar, Clock, Users, AlertCircle, Check, X } from 'lucide-react';
+import { Calendar, Clock, Users, AlertCircle, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const ReservationPage = () => {
   const navigate = useNavigate();
@@ -26,10 +26,42 @@ const ReservationPage = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(true);
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Generate 7 days starting from today + weekOffset
+  const dateCards = useMemo(() => {
+    const days = [];
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() + weekOffset * 7);
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      // Skip past dates
+      if (d < new Date(today.toDateString())) continue;
+      days.push({
+        date: d.toISOString().split('T')[0],
+        dayName: d.toLocaleDateString('en-IN', { weekday: 'short' }),
+        dayNum: d.getDate(),
+        month: d.toLocaleDateString('en-IN', { month: 'short' }),
+        isToday: d.toDateString() === today.toDateString(),
+      });
+    }
+    return days;
+  }, [weekOffset]);
 
   useEffect(() => {
     fetchReservations();
   }, []);
+
+  useEffect(() => {
+    if (formData.date) {
+      fetchSlots(formData.date);
+    }
+  }, [formData.date]);
 
   const fetchReservations = async () => {
     try {
@@ -43,6 +75,19 @@ const ReservationPage = () => {
     }
   };
 
+  const fetchSlots = async (date) => {
+    try {
+      setSlotsLoading(true);
+      const data = await reservationsApi.getSlots(date);
+      setSlots(data.slots || []);
+    } catch (error) {
+      console.error('Failed to load slots:', error);
+      setSlots([]);
+    } finally {
+      setSlotsLoading(false);
+    }
+  };
+
   const sanitize = (str) => str.replace(/[<>"'&]/g, '');
 
   const handleChange = (e) => {
@@ -53,10 +98,38 @@ const ReservationPage = () => {
     }));
   };
 
+  const selectDate = (date) => {
+    setFormData((prev) => ({ ...prev, date, time: '' }));
+  };
+
+  const selectTime = (time) => {
+    setFormData((prev) => ({ ...prev, time }));
+  };
+
+  const formatTime12h = (time24) => {
+    const [h, m] = time24.split(':');
+    const hour = parseInt(h, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const h12 = hour % 12 || 12;
+    return `${h12}:${m} ${ampm}`;
+  };
+
+  const getSlotStyle = (slot) => {
+    if (slot.status === 'past' || slot.status === 'full') {
+      return 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200';
+    }
+    if (slot.time === formData.time) {
+      return 'bg-amber-600 text-white border-amber-600 ring-2 ring-amber-300';
+    }
+    if (slot.status === 'few_left') {
+      return 'bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100 cursor-pointer';
+    }
+    return 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-300 cursor-pointer';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validation
     if (!formData.date || !formData.time || !formData.guest_name || !formData.phone || !formData.email) {
       toast.error('Please fill in all required fields');
       return;
@@ -74,11 +147,10 @@ const ReservationPage = () => {
 
     try {
       setSubmitting(true);
-      const response = await reservationsApi.createReservation(formData);
+      await reservationsApi.createReservation(formData);
 
       toast.success('Reservation confirmed! A confirmation email has been sent.');
       
-      // Reset form
       setFormData({
         date: '',
         time: '',
@@ -88,8 +160,8 @@ const ReservationPage = () => {
         email: '',
         special_requests: '',
       });
+      setSlots([]);
 
-      // Refresh reservations
       await fetchReservations();
       setShowForm(false);
     } catch (error) {
@@ -140,129 +212,251 @@ const ReservationPage = () => {
               <Card className="p-6">
                 <CardHeader>
                   <CardTitle>Book Your Table</CardTitle>
-                  <CardDescription>Reserve a table at our restaurant</CardDescription>
+                  <CardDescription>Pick a date and time slot, then fill in your details</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="date" className="block mb-2 font-semibold">
-                          Reservation Date *
-                        </Label>
-                        <Input
-                          type="date"
-                          id="date"
-                          name="date"
-                          value={formData.date}
-                          onChange={handleChange}
-                          min={new Date().toISOString().split('T')[0]}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="time" className="block mb-2 font-semibold">
-                          Reservation Time *
-                        </Label>
-                        <Input
-                          type="time"
-                          id="time"
-                          name="time"
-                          value={formData.time}
-                          onChange={handleChange}
-                          required
-                        />
-                      </div>
-                    </div>
-
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Step 1: Date Picker Strip */}
                     <div>
-                      <Label htmlFor="party_size" className="block mb-2 font-semibold">
-                        Party Size * (1-20 guests)
+                      <Label className="block mb-3 font-semibold text-lg flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-amber-600" /> Select Date
                       </Label>
-                      <Input
-                        type="number"
-                        id="party_size"
-                        name="party_size"
-                        value={formData.party_size}
-                        onChange={handleChange}
-                        min="1"
-                        max="20"
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="guest_name" className="block mb-2 font-semibold">
-                          Guest Name *
-                        </Label>
-                        <Input
-                          id="guest_name"
-                          name="guest_name"
-                          value={formData.guest_name}
-                          onChange={handleChange}
-                          placeholder="Your name"
-                          required
-                        />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="flex-shrink-0"
+                          disabled={weekOffset === 0}
+                          onClick={() => setWeekOffset((w) => Math.max(0, w - 1))}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <div className="flex gap-2 overflow-x-auto flex-1 pb-1">
+                          {dateCards.map((d) => (
+                            <button
+                              key={d.date}
+                              type="button"
+                              onClick={() => selectDate(d.date)}
+                              className={`flex flex-col items-center min-w-[70px] px-3 py-3 rounded-xl border-2 transition-all ${
+                                formData.date === d.date
+                                  ? 'bg-amber-600 text-white border-amber-600 ring-2 ring-amber-300'
+                                  : d.isToday
+                                  ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+                                  : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-amber-300'
+                              }`}
+                            >
+                              <span className="text-xs font-medium uppercase">{d.dayName}</span>
+                              <span className="text-2xl font-bold">{d.dayNum}</span>
+                              <span className="text-xs">{d.month}</span>
+                              {d.isToday && formData.date !== d.date && (
+                                <span className="text-[10px] mt-0.5 text-amber-600 font-semibold">Today</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="flex-shrink-0"
+                          disabled={weekOffset >= 3}
+                          onClick={() => setWeekOffset((w) => Math.min(3, w + 1))}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
                       </div>
+                    </div>
+
+                    {/* Step 2: Time Slot Grid */}
+                    {formData.date && (
                       <div>
-                        <Label htmlFor="phone" className="block mb-2 font-semibold">
-                          Phone Number *
+                        <Label className="block mb-3 font-semibold text-lg flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-amber-600" /> Select Time
                         </Label>
-                        <Input
-                          id="phone"
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handleChange}
-                          placeholder="+91 98765 43210"
-                          required
-                        />
+                        {slotsLoading ? (
+                          <div className="text-center py-6 text-slate-500">Loading available slots...</div>
+                        ) : slots.length === 0 ? (
+                          <div className="text-center py-6 text-slate-500">No slots available for this date</div>
+                        ) : (
+                          <>
+                            {/* Lunch Slots */}
+                            {slots.some(s => parseInt(s.time.split(':')[0]) < 16) && (
+                              <div className="mb-4">
+                                <p className="text-sm font-medium text-slate-500 mb-2">🌤️ Lunch</p>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                  {slots.filter(s => parseInt(s.time.split(':')[0]) < 16).map((slot) => (
+                                    <button
+                                      key={slot.time}
+                                      type="button"
+                                      disabled={slot.status === 'past' || slot.status === 'full'}
+                                      onClick={() => selectTime(slot.time)}
+                                      className={`px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${getSlotStyle(slot)}`}
+                                    >
+                                      <div>{formatTime12h(slot.time)}</div>
+                                      {slot.status === 'few_left' && (
+                                        <div className="text-[10px] mt-0.5">Only {slot.available} left</div>
+                                      )}
+                                      {slot.status === 'full' && (
+                                        <div className="text-[10px] mt-0.5">Full</div>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {/* Dinner Slots */}
+                            {slots.some(s => parseInt(s.time.split(':')[0]) >= 16) && (
+                              <div>
+                                <p className="text-sm font-medium text-slate-500 mb-2">🌙 Dinner</p>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                  {slots.filter(s => parseInt(s.time.split(':')[0]) >= 16).map((slot) => (
+                                    <button
+                                      key={slot.time}
+                                      type="button"
+                                      disabled={slot.status === 'past' || slot.status === 'full'}
+                                      onClick={() => selectTime(slot.time)}
+                                      className={`px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${getSlotStyle(slot)}`}
+                                    >
+                                      <div>{formatTime12h(slot.time)}</div>
+                                      {slot.status === 'few_left' && (
+                                        <div className="text-[10px] mt-0.5">Only {slot.available} left</div>
+                                      )}
+                                      {slot.status === 'full' && (
+                                        <div className="text-[10px] mt-0.5">Full</div>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
-                    </div>
+                    )}
 
-                    <div>
-                      <Label htmlFor="email" className="block mb-2 font-semibold">
-                        Email Address *
-                      </Label>
-                      <Input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        placeholder="your.email@example.com"
-                        required
-                      />
-                    </div>
+                    {/* Step 3: Party Size */}
+                    {formData.date && formData.time && (
+                      <div>
+                        <Label className="block mb-3 font-semibold text-lg flex items-center gap-2">
+                          <Users className="w-5 h-5 text-amber-600" /> Party Size
+                        </Label>
+                        <div className="flex items-center gap-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setFormData(prev => ({ ...prev, party_size: Math.max(1, prev.party_size - 1) }))}
+                            disabled={formData.party_size <= 1}
+                          >
+                            -
+                          </Button>
+                          <span className="text-3xl font-bold text-amber-600 w-12 text-center">{formData.party_size}</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setFormData(prev => ({ ...prev, party_size: Math.min(20, prev.party_size + 1) }))}
+                            disabled={formData.party_size >= 20}
+                          >
+                            +
+                          </Button>
+                          <span className="text-slate-500 text-sm">guest{formData.party_size !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                    )}
 
-                    <div>
-                      <Label htmlFor="special_requests" className="block mb-2 font-semibold">
-                        Special Requests (Optional)
-                      </Label>
-                      <textarea
-                        id="special_requests"
-                        name="special_requests"
-                        value={formData.special_requests}
-                        onChange={handleChange}
-                        placeholder="Any dietary restrictions, celebrations, or special needs?"
-                        rows="3"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
+                    {/* Step 4: Guest Details */}
+                    {formData.date && formData.time && (
+                      <div className="space-y-4 border-t pt-4">
+                        <p className="font-semibold text-lg">Guest Details</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="guest_name" className="block mb-2 font-semibold">
+                              Guest Name *
+                            </Label>
+                            <Input
+                              id="guest_name"
+                              name="guest_name"
+                              value={formData.guest_name}
+                              onChange={handleChange}
+                              placeholder="Your name"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="phone" className="block mb-2 font-semibold">
+                              Phone Number *
+                            </Label>
+                            <Input
+                              id="phone"
+                              name="phone"
+                              value={formData.phone}
+                              onChange={handleChange}
+                              placeholder="+91 98765 43210"
+                              required
+                            />
+                          </div>
+                        </div>
 
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
-                      <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-blue-700">
-                        A confirmation email will be sent to you. Please arrive 5-10 minutes before your reservation time.
-                      </p>
-                    </div>
+                        <div>
+                          <Label htmlFor="email" className="block mb-2 font-semibold">
+                            Email Address *
+                          </Label>
+                          <Input
+                            type="email"
+                            id="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            placeholder="your.email@example.com"
+                            required
+                          />
+                        </div>
 
-                    <Button
-                      type="submit"
-                      disabled={submitting}
-                      className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg"
-                    >
-                      {submitting ? 'Booking...' : 'Confirm Reservation'}
-                    </Button>
+                        <div>
+                          <Label htmlFor="special_requests" className="block mb-2 font-semibold">
+                            Special Requests (Optional)
+                          </Label>
+                          <textarea
+                            id="special_requests"
+                            name="special_requests"
+                            value={formData.special_requests}
+                            onChange={handleChange}
+                            placeholder="Any dietary restrictions, celebrations, or special needs?"
+                            rows="3"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Check className="w-5 h-5 text-amber-600" />
+                            <p className="font-semibold text-amber-800">Booking Summary</p>
+                          </div>
+                          <p className="text-sm text-amber-700">
+                            📅 {new Date(formData.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                            &nbsp;• ⏰ {formatTime12h(formData.time)}
+                            &nbsp;• 👥 {formData.party_size} guest{formData.party_size !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
+                          <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm text-blue-700">
+                            A confirmation email will be sent to you. Please arrive 5-10 minutes before your reservation time.
+                          </p>
+                        </div>
+
+                        <Button
+                          type="submit"
+                          disabled={submitting}
+                          className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg"
+                        >
+                          {submitting ? 'Booking...' : 'Confirm Reservation'}
+                        </Button>
+                      </div>
+                    )}
                   </form>
                 </CardContent>
               </Card>

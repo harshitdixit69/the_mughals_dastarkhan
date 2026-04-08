@@ -16,6 +16,7 @@ from routes.cart import get_carts_store
 from database import get_db, is_mongo_available
 from email_service import send_order_confirmation_email
 from routes.loyalty import get_user_tier, loyalty_store, points_transaction_store
+from whatsapp_service import send_order_status_notification
 
 logger = logging.getLogger(__name__)
 orders_router = APIRouter(prefix="/orders", tags=["orders"])
@@ -113,6 +114,20 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
 
         # Award loyalty points
         await _award_loyalty_points(current_user['id'], order_id, total_amount)
+
+        # Send WhatsApp notification on order placed
+        try:
+            user_phone = order_data.phone or current_user.get('phone')
+            if user_phone:
+                await send_order_status_notification(
+                    phone=user_phone,
+                    order_id=order_id,
+                    status='placed',
+                    total=total_amount,
+                    order_type=order_data.order_type,
+                )
+        except Exception as wa_err:
+            logger.warning(f"WhatsApp notification failed for new order {order_id}: {wa_err}")
 
         return OrderResponse(
             id=order_id,
@@ -325,6 +340,27 @@ async def update_order_status(
                 order['picked_up_at'] = now
             elif new_status == 'delivered':
                 order['delivered_at'] = now
+
+        # Send WhatsApp notification if user has opted in
+        try:
+            user_phone = order.get('phone')
+            if not user_phone and is_mongo_available():
+                db = get_db()
+                user_doc = await db.users.find_one({'id': order.get('user_id')}, {'phone': 1, 'whatsapp_notifications': 1})
+                if user_doc and user_doc.get('whatsapp_notifications'):
+                    user_phone = user_doc.get('phone')
+            if user_phone:
+                await send_order_status_notification(
+                    phone=user_phone,
+                    order_id=order_id,
+                    status=new_status,
+                    total=order.get('total_amount', ''),
+                    order_type=order.get('order_type', ''),
+                    driver_name=order.get('driver_name', ''),
+                    driver_phone=order.get('driver_phone', ''),
+                )
+        except Exception as wa_err:
+            logger.warning(f"WhatsApp notification failed for order {order_id}: {wa_err}")
         
         return {"message": f"Order status updated to {new_status}", "status": new_status}
     except HTTPException:
@@ -609,3 +645,75 @@ async def _award_loyalty_points(user_id: str, order_id: str, total_amount: int):
             })
     except Exception as e:
         logger.error(f"Failed to award loyalty points: {e}")
+
+
+# ========== DRIVER LIVE LOCATION ==========
+# In-memory cache: { order_id: { lat, lng, updated_at } }
+_driver_locations: dict = {}
+
+
+@orders_router.post("/{order_id}/driver-location")
+async def update_driver_location(
+    order_id: str,
+    lat: float,
+    lng: float,
+    current_user: dict = Depends(get_current_user)
+):
+    """Driver pushes their GPS coordinates (delivery_agent or admin only)"""
+    role = current_user.get('role', 'user')
+    if role not in ('admin', 'delivery_agent'):
+        raise HTTPException(status_code=403, detail="Only delivery agents can update location")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Store in memory for fast reads
+    _driver_locations[order_id] = {'lat': lat, 'lng': lng, 'updated_at': now}
+
+    # Also persist in MongoDB if available
+    if is_mongo_available():
+        db = get_db()
+        await db.orders.update_one(
+            {'id': order_id},
+            {'$set': {'driver_location': {'lat': lat, 'lng': lng, 'updated_at': now}}}
+        )
+
+    return {"message": "Location updated"}
+
+
+@orders_router.get("/{order_id}/driver-location")
+async def get_driver_location(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Customer or admin fetches the driver's latest GPS position"""
+    # Check memory cache first
+    loc = _driver_locations.get(order_id)
+    if loc:
+        return loc
+
+    # Fall back to MongoDB
+    if is_mongo_available():
+        db = get_db()
+        order = await db.orders.find_one({'id': order_id}, {'driver_location': 1})
+        if order and order.get('driver_location'):
+            return order['driver_location']
+
+    return {"lat": None, "lng": None, "updated_at": None}
+
+
+@orders_router.post("/{order_id}/simulate-driver-location")
+async def simulate_driver_location(
+    order_id: str,
+    lat: float,
+    lng: float,
+    current_user: dict = Depends(get_current_user)
+):
+    """Test helper: simulate driver GPS without requiring delivery_agent role"""
+    now = datetime.now(timezone.utc).isoformat()
+    _driver_locations[order_id] = {'lat': lat, 'lng': lng, 'updated_at': now}
+
+    if is_mongo_available():
+        db = get_db()
+        await db.orders.update_one(
+            {'id': order_id},
+            {'$set': {'driver_location': {'lat': lat, 'lng': lng, 'updated_at': now}}}
+        )
+
+    return {"message": "Simulated location updated"}

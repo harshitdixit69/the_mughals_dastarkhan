@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, User, Phone } from 'lucide-react';
+import { Mail, Lock, User, Phone, Gift } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -22,6 +22,7 @@ const LoginPage = () => {
     email: '',
     password: '',
     phone: '',
+    referral_code: '',
   });
 
   const handleLoginChange = (e) => {
@@ -209,6 +210,22 @@ const LoginPage = () => {
                       className="pl-10"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <Label className="text-[#0f172a]">Referral Code (Optional)</Label>
+                  <div className="relative mt-2">
+                    <Gift className="absolute left-3 top-3 w-5 h-5 text-[#64748b]" />
+                    <Input
+                      type="text"
+                      name="referral_code"
+                      placeholder="e.g. MUGHAL-RAHUL-A3X7"
+                      value={signupForm.referral_code}
+                      onChange={handleSignupChange}
+                      className="pl-10 uppercase"
+                    />
+                  </div>
+                  <p className="text-xs text-[#64748b] mt-1">Have a friend's code? Both of you get ₹100 off!</p>
                 </div>
 
                 <Button

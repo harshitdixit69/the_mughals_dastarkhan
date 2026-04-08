@@ -1,0 +1,127 @@
+================================================================================
+                    THE MUGHAL'S DASTARKHWAN - RUN COMMANDS
+================================================================================
+
+## BACKEND (FastAPI + Python) - Port 8000
+--------------------------------------------------------------------------------
+
+# Navigate to backend directory
+cd backend
+
+# Create virtual environment (if not exists)
+python -m venv venv
+
+# Activate virtual environment
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server (development with auto-reload)
+uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+
+# OR using Python directly
+python -m uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+
+# Backend API will be available at: http://localhost:8000
+
+
+## FRONTEND (React + CRACO + Tailwind) - Port 3000
+--------------------------------------------------------------------------------
+
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies (using yarn - preferred)
+yarn install
+
+# OR using npm
+npm install
+
+# Start development server
+yarn start
+
+# OR with npm
+npm start
+
+# Frontend will be available at: http://localhost:3000
+
+
+## MOBILE APP (React Native + Expo)
+--------------------------------------------------------------------------------
+
+# Navigate to mobile directory
+cd mobile
+
+# Install dependencies
+npm install
+
+# Start Expo development server
+npm start
+
+# OR
+npx expo start
+
+# Run on specific platform:
+npm run android    # Android emulator/device
+npm run ios        # iOS simulator (macOS only)
+npm run web        # Web browser
+
+# Note: Make sure you have Expo Go app installed on your phone
+# or have Android Studio/iOS Simulator set up.
+
+
+## QUICK START - ALL THREE (Run in separate terminals)
+================================================================================
+
+# Terminal 1 - Backend
+cd backend && venv\Scripts\activate && uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+
+# Terminal 2 - Frontend
+cd frontend && yarn start
+
+# Terminal 3 - Mobile
+cd mobile && npm start
+
+
+## TECH STACK SUMMARY
+================================================================================
+
+| Component | Technology                          | Port |
+|-----------|-------------------------------------|------|
+| Backend   | Python 3.11 + FastAPI + MongoDB     | 8000 |
+| Frontend  | React 18 + CRACO + TailwindCSS      | 3000 |
+| Mobile    | React Native + Expo                 | 8081 |
+
+
+## PREREQUISITES
+================================================================================
+
+1. Python 3.11+ installed
+2. Node.js 18+ installed
+3. MongoDB running (locally or cloud)
+4. Expo CLI installed (for mobile): npm install -g expo-cli
+5. Android Studio or Xcode (for mobile emulators)
+
+
+## DOCKER ALTERNATIVE (if available)
+================================================================================
+
+# Run all services using Docker Compose
+docker-compose up
+
+# Or build and run individual services:
+# Backend
+docker build -t mughals-backend ./backend
+docker run -p 8000:8000 mughals-backend
+
+# Frontend
+docker build -t mughals-frontend ./frontend
+docker run -p 3000:80 mughals-frontend
+
+================================================================================
+                         Generated: 2026-04-06
+================================================================================

@@ -126,9 +126,6 @@ export default function CheckoutPage() {
               setDeliveryType(estimates[0].type);
               setDeliveryPartner(estimates[0].partner);
               setDeliveryCharge(estimates[0].charge);
-              if (estimates[0].type === 'external_delivery') {
-                setFormData(prev => prev.payment_method === 'cod' ? { ...prev, payment_method: 'gpay' } : prev);
-              }
             }
             resolve(estimates);
           } catch (err) {
@@ -198,10 +195,6 @@ export default function CheckoutPage() {
             setDeliveryType(estimates[0].type);
             setDeliveryPartner(estimates[0].partner);
             setDeliveryCharge(estimates[0].charge);
-            // Auto-switch away from COD for external delivery
-            if (estimates[0].type === 'external_delivery') {
-              setFormData(prev => prev.payment_method === 'cod' ? { ...prev, payment_method: 'gpay' } : prev);
-            }
           }
         } catch (err) {
           console.error('Failed to fetch delivery estimates:', err);
@@ -265,10 +258,6 @@ export default function CheckoutPage() {
     setDeliveryType(estimate.type);
     setDeliveryPartner(estimate.partner);
     setDeliveryCharge(estimate.charge);
-    // Auto-switch away from COD for external delivery partners
-    if (estimate.type === 'external_delivery' && formData.payment_method === 'cod') {
-      setFormData(prev => ({ ...prev, payment_method: 'gpay' }));
-    }
   };
 
   const loadRazorpayScript = (() => {
@@ -760,20 +749,17 @@ export default function CheckoutPage() {
                 <div>
                   <Label className="block mb-2 font-semibold">Payment Method *</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${formData.payment_method === 'cod' ? 'border-amber-500 bg-amber-50' : 'border-slate-300'} ${deliveryType === 'external_delivery' ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${formData.payment_method === 'cod' ? 'border-amber-500 bg-amber-50' : 'border-slate-300'}`}>
                       <input
                         type="radio"
                         name="payment_method"
                         value="cod"
                         checked={formData.payment_method === 'cod'}
                         onChange={handleChange}
-                        disabled={deliveryType === 'external_delivery'}
                       />
                       <div>
                         <p className="font-semibold text-slate-900">Cash on Delivery</p>
-                        <p className="text-xs text-slate-500">
-                          {deliveryType === 'external_delivery' ? 'Not available for Porter/Dunzo delivery' : 'Pay at the counter/door'}
-                        </p>
+                        <p className="text-xs text-slate-500">Pay at the counter/door</p>
                       </div>
                     </label>
 

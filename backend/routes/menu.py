@@ -4,7 +4,7 @@ Menu routes - categories, items, testimonials
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends
-from models import MenuCategory, MenuItem, MenuItemUpdate, Testimonial, RestaurantInfo
+from models import MenuCategory, MenuItem, MenuItemCreate, MenuItemUpdate, Testimonial, RestaurantInfo
 from config import MENU_CATEGORIES, MENU_ITEMS, TESTIMONIALS, RESTAURANT_INFO
 from database import get_db, is_mongo_available
 from auth import get_current_user
@@ -45,6 +45,65 @@ async def get_menu_items(category_id: Optional[str] = None):
         if category_id:
             return [item for item in MENU_ITEMS if item["category_id"] == category_id]
         return MENU_ITEMS
+
+
+@menu_router.post("")
+async def create_menu_item(item_data: MenuItemCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new menu item (admin only)"""
+    try:
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        if is_mongo_available():
+            db = get_db()
+            # Get next available ID
+            last_item = await db.menu_items.find_one(sort=[("id", -1)])
+            next_id = (last_item["id"] + 1) if last_item else 1
+
+            new_item = {"id": next_id, **item_data.model_dump()}
+            await db.menu_items.insert_one(new_item)
+            new_item.pop('_id', None)
+            return new_item
+        else:
+            next_id = max((item["id"] for item in MENU_ITEMS), default=0) + 1
+            new_item = {"id": next_id, **item_data.model_dump()}
+            MENU_ITEMS.append(new_item)
+            return new_item
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating menu item: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create menu item")
+
+
+@menu_router.delete("/{item_id}")
+async def delete_menu_item(item_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete a menu item (admin only)"""
+    try:
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        if is_mongo_available():
+            db = get_db()
+            result = await db.menu_items.delete_one({'id': item_id})
+            if result.deleted_count == 0:
+                raise HTTPException(status_code=404, detail="Menu item not found")
+        else:
+            item_found = False
+            for i, item in enumerate(MENU_ITEMS):
+                if item.get('id') == item_id:
+                    MENU_ITEMS.pop(i)
+                    item_found = True
+                    break
+            if not item_found:
+                raise HTTPException(status_code=404, detail="Menu item not found")
+
+        return {"message": "Menu item deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting menu item: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete menu item")
 
 
 @menu_router.get("/{item_id}", response_model=MenuItem)

@@ -184,6 +184,16 @@ export const menuApi = {
     const response = await apiClient.put(`/menu/${itemId}`, updateData);
     return response.data;
   },
+
+  createItem: async (itemData) => {
+    const response = await apiClient.post('/menu', itemData);
+    return response.data;
+  },
+
+  deleteItem: async (itemId) => {
+    const response = await apiClient.delete(`/menu/${itemId}`);
+    return response.data;
+  },
 };
 
 // Testimonials API
@@ -204,6 +214,11 @@ export const restaurantApi = {
 
 // Reservations API
 export const reservationsApi = {
+  getSlots: async (date) => {
+    const response = await apiClient.get(`/auth/reservations/slots/${date}`);
+    return response.data;
+  },
+
   createReservation: async (reservationData) => {
     const response = await apiClient.post('/auth/reservations', reservationData);
     return response.data;
@@ -477,6 +492,41 @@ export const deliveryAgentsApi = {
       status,
       note,
     });
+    return response.data;
+  },
+
+  // Driver location sharing
+  updateDriverLocation: async (orderId, lat, lng) => {
+    const response = await apiClient.post(`/auth/orders/${orderId}/driver-location`, null, {
+      params: { lat, lng }
+    });
+    return response.data;
+  },
+
+  getDriverLocation: async (orderId) => {
+    const response = await apiClient.get(`/auth/orders/${orderId}/driver-location`);
+    return response.data;
+  },
+
+  // Test helper: simulate driver GPS without needing delivery_agent role
+  simulateDriverLocation: async (orderId, lat, lng) => {
+    const response = await apiClient.post(`/auth/orders/${orderId}/simulate-driver-location`, null, {
+      params: { lat, lng }
+    });
+    return response.data;
+  },
+};
+
+// AI Chat API
+export const chatApi = {
+  // Authenticated chat (order status, personalized recommendations)
+  send: async (message, history = []) => {
+    const response = await apiClient.post('/auth/chat', { message, history });
+    return response.data;
+  },
+  // Public chat (no login needed, menu queries only)
+  sendQuick: async (message, history = []) => {
+    const response = await apiClient.post('/chat/quick', { message, history });
     return response.data;
   },
 };

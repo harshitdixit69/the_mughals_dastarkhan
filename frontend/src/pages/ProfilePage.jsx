@@ -6,6 +6,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { authApi, menuApi, ordersApi, loyaltyApi, cartApi } from '../services/api';
+import OrderTracker from '../components/OrderTracker';
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -89,6 +90,7 @@ const ProfilePage = () => {
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: '', phone: '' });
   const [savingProfile, setSavingProfile] = useState(false);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [addressForm, setAddressForm] = useState({ label: '', address: '', landmark: '' });
   const [savingAddress, setSavingAddress] = useState(false);
@@ -134,6 +136,7 @@ const ProfilePage = () => {
         ]);
         setProfile(profileData);
         setProfileForm({ name: profileData.name || '', phone: profileData.phone || '' });
+        setWhatsappEnabled(profileData.whatsapp_notifications || false);
         setMenuItems(itemsData);
         setOrders(ordersData);
         setLastRefresh(new Date());
@@ -358,6 +361,13 @@ const ProfilePage = () => {
               <Badge className={`text-xs px-2.5 py-1 ${getStatusColor(order.status)}`}>
                 {getStatusLabel(order.status)}
               </Badge>
+              <button
+                onClick={(e) => { e.stopPropagation(); fetchOrders(); }}
+                className="p-1.5 rounded-full hover:bg-gray-200 transition-colors text-gray-500 hover:text-gray-700"
+                title="Refresh order status"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Status Step Tracker for active orders (not in compact mode) */}
@@ -501,33 +511,20 @@ const ProfilePage = () => {
           )}
         </div>
 
-        {/* Status History Timeline */}
-        {!compact && order.status_history && order.status_history.length > 0 && expandedOrder === order.id && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <h4 className="text-sm font-semibold text-[#0f172a] mb-2">Status Timeline</h4>
-            <div className="space-y-2">
-              {order.status_history.map((entry, idx) => (
-                <div key={idx} className="flex items-start gap-3 text-xs">
-                  <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
-                  <div>
-                    <span className="font-semibold capitalize">{getStatusLabel(entry.status)}</span>
-                    {entry.changed_by && <span className="text-gray-500 ml-1">by {entry.changed_by}</span>}
-                    {entry.note && <p className="text-gray-500 italic">{entry.note}</p>}
-                    <p className="text-gray-400">{new Date(entry.timestamp).toLocaleString()}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Real-time Order Tracker */}
+        {!compact && expandedOrder === order.id && (
+          <div className="mt-3">
+            <OrderTracker order={order} />
           </div>
         )}
 
         {/* Delivery Agent Info */}
-        {order.delivery_agent_name && (
+        {order.delivery_agent_name && expandedOrder !== order.id && (
           <div className="mt-2 p-2.5 bg-indigo-50 rounded-lg text-sm">
             <p className="text-indigo-800 font-semibold">🛵 Delivery Agent: {order.delivery_agent_name}</p>
           </div>
         )}
-        {order.driver_name && !order.delivery_agent_name && (
+        {order.driver_name && !order.delivery_agent_name && expandedOrder !== order.id && (
           <div className="mt-2 p-2.5 bg-indigo-50 rounded-lg text-sm">
             <p className="text-indigo-800 font-semibold">🛵 Driver: {order.driver_name}</p>
             {order.driver_phone && <p className="text-indigo-600 text-xs">📞 {order.driver_phone}</p>}
@@ -1022,6 +1019,44 @@ const ProfilePage = () => {
                 </div>
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* WhatsApp Notifications */}
+      <Card className="bg-white/90 backdrop-blur-sm shadow-xl border-none">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-xl">💬</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-[#0f172a]">WhatsApp Notifications</h2>
+                <p className="text-sm text-[#64748b]">Get order updates on WhatsApp</p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                const newVal = !whatsappEnabled;
+                setWhatsappEnabled(newVal);
+                try {
+                  await authApi.updateProfile({ whatsapp_notifications: newVal });
+                  toast.success(newVal ? 'WhatsApp notifications enabled!' : 'WhatsApp notifications disabled');
+                } catch {
+                  setWhatsappEnabled(!newVal);
+                  toast.error('Failed to update preference');
+                }
+              }}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${whatsappEnabled ? 'bg-green-500' : 'bg-gray-300'}`}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${whatsappEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          {whatsappEnabled && !profile.phone && (
+            <p className="text-xs text-amber-600 mt-3 bg-amber-50 px-3 py-2 rounded-lg">
+              ⚠️ Please add your phone number above to receive WhatsApp notifications.
+            </p>
           )}
         </CardContent>
       </Card>

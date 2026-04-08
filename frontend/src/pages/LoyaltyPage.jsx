@@ -4,16 +4,19 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { loyaltyApi } from '../services/api';
-import { Gift, Zap, TrendingUp, Ticket, Crown } from 'lucide-react';
+import { loyaltyApi, authApi } from '../services/api';
+import { Gift, Zap, TrendingUp, Ticket, Crown, Share2, Copy, Users } from 'lucide-react';
 
 const LoyaltyPage = () => {
   const [loyaltyStatus, setLoyaltyStatus] = useState(null);
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
+  const [referralCount, setReferralCount] = useState(0);
 
   useEffect(() => {
     loadLoyaltyData();
+    loadReferralData();
   }, []);
 
   const loadLoyaltyData = async () => {
@@ -30,6 +33,33 @@ const LoyaltyPage = () => {
       toast.error('Failed to load loyalty information');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadReferralData = async () => {
+    try {
+      const profile = await authApi.getProfile();
+      setReferralCode(profile.referral_code || '');
+      setReferralCount(profile.referral_count || 0);
+    } catch (error) {
+      console.error('Error loading referral data:', error);
+    }
+  };
+
+  const copyReferralCode = () => {
+    if (referralCode) {
+      navigator.clipboard.writeText(referralCode);
+      toast.success('Referral code copied!');
+    }
+  };
+
+  const shareReferral = () => {
+    const text = `🍽️ Join me at The Mughal's Dastarkhan! Use my referral code ${referralCode} when signing up and we both get ₹100 off our next order!`;
+    if (navigator.share) {
+      navigator.share({ title: "The Mughal's Dastarkhan Referral", text });
+    } else {
+      navigator.clipboard.writeText(text);
+      toast.success('Referral message copied to clipboard!');
     }
   };
 
@@ -234,6 +264,44 @@ const LoyaltyPage = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Referral Section */}
+        {referralCode && (
+          <Card className="mb-8 border-2 border-green-200 bg-green-50/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-green-600" />
+                Refer a Friend — Both Get ₹100 Off!
+              </CardTitle>
+              <CardDescription>Share your code and earn rewards when friends sign up</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center mb-4">
+                <div className="flex-1">
+                  <p className="text-sm text-gray-600 mb-2">Your Referral Code</p>
+                  <div className="flex items-center gap-2">
+                    <div className="bg-white border-2 border-dashed border-green-400 rounded-lg px-4 py-3 font-mono text-lg font-bold text-green-700 tracking-wider">
+                      {referralCode}
+                    </div>
+                    <Button variant="outline" size="icon" onClick={copyReferralCode} title="Copy code">
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" className="bg-green-600 hover:bg-green-700" onClick={shareReferral} title="Share">
+                      <Share2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-center bg-white rounded-lg px-6 py-3 border">
+                  <p className="text-3xl font-bold text-green-600">{referralCount}</p>
+                  <p className="text-xs text-gray-500">Friends Referred</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                When a friend signs up with your code, you both receive a <strong>₹100 discount coupon</strong> — no minimum order required!
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* How It Works */}
         <Card>

@@ -93,6 +93,10 @@ const AdminDashboard = () => {
   const [agents, setAgents] = useState([]);
   const [availableAgents, setAvailableAgents] = useState([]);
   const [menuSavingId, setMenuSavingId] = useState(null);
+  const [deletingMenuId, setDeletingMenuId] = useState(null);
+  const [showNewItemForm, setShowNewItemForm] = useState(false);
+  const [newItemForm, setNewItemForm] = useState({ name: '', price: '', category_id: 'kebabs', description: '', is_veg: false, is_popular: false });
+  const [creatingMenuItem, setCreatingMenuItem] = useState(false);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
   const [updatingReservationId, setUpdatingReservationId] = useState(null);
   const [assigningAgentOrderId, setAssigningAgentOrderId] = useState(null);
@@ -402,6 +406,46 @@ const AdminDashboard = () => {
       toast.error('Failed to update menu item');
     } finally {
       setMenuSavingId(null);
+    }
+  };
+
+  const handleCreateMenuItem = async () => {
+    try {
+      if (!newItemForm.name || !newItemForm.price || !newItemForm.description) {
+        toast.error('Please fill in name, price, and description');
+        return;
+      }
+      setCreatingMenuItem(true);
+      const created = await menuApi.createItem({
+        name: newItemForm.name,
+        price: Number(newItemForm.price),
+        category_id: newItemForm.category_id,
+        description: newItemForm.description,
+        is_veg: newItemForm.is_veg,
+        is_popular: newItemForm.is_popular
+      });
+      setMenuItems([...menuItems, created]);
+      setNewItemForm({ name: '', price: '', category_id: 'kebabs', description: '', is_veg: false, is_popular: false });
+      setShowNewItemForm(false);
+      toast.success('Menu item created');
+    } catch (error) {
+      toast.error('Failed to create menu item');
+    } finally {
+      setCreatingMenuItem(false);
+    }
+  };
+
+  const handleDeleteMenuItem = async (itemId) => {
+    if (!window.confirm('Are you sure you want to delete this menu item?')) return;
+    try {
+      setDeletingMenuId(itemId);
+      await menuApi.deleteItem(itemId);
+      setMenuItems(menuItems.filter(i => i.id !== itemId));
+      toast.success('Menu item deleted');
+    } catch (error) {
+      toast.error('Failed to delete menu item');
+    } finally {
+      setDeletingMenuId(null);
     }
   };
 
@@ -1149,11 +1193,97 @@ const AdminDashboard = () => {
           {/* Menu Tab */}
           <TabsContent value="menu">
             <Card>
-              <CardHeader>
-                <CardTitle>Menu Management</CardTitle>
-                <CardDescription>Edit menu items and pricing</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Menu Management</CardTitle>
+                  <CardDescription>Edit menu items and pricing</CardDescription>
+                </div>
+                <Button
+                  className="bg-amber-600 hover:bg-amber-700"
+                  onClick={() => setShowNewItemForm(!showNewItemForm)}
+                >
+                  {showNewItemForm ? 'Cancel' : '+ Add New Item'}
+                </Button>
               </CardHeader>
               <CardContent>
+                {showNewItemForm && (
+                  <div className="border-2 border-dashed border-amber-400 rounded-lg p-4 mb-6 bg-amber-50">
+                    <h3 className="font-semibold text-lg mb-3">Add New Menu Item</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label>Name *</Label>
+                        <Input
+                          value={newItemForm.name}
+                          onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
+                          placeholder="e.g. Chicken Biryani"
+                          className="mt-2"
+                        />
+                      </div>
+                      <div>
+                        <Label>Price (₹) *</Label>
+                        <Input
+                          type="number"
+                          value={newItemForm.price}
+                          onChange={(e) => setNewItemForm({ ...newItemForm, price: e.target.value })}
+                          placeholder="e.g. 350"
+                          className="mt-2"
+                        />
+                      </div>
+                      <div>
+                        <Label>Category *</Label>
+                        <select
+                          value={newItemForm.category_id}
+                          onChange={(e) => setNewItemForm({ ...newItemForm, category_id: e.target.value })}
+                          className="w-full mt-2 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        >
+                          <option value="kebabs">Kebabs & Starters</option>
+                          <option value="main-nonveg">Main Course – Non-Veg</option>
+                          <option value="main-veg">Main Course – Veg</option>
+                          <option value="biryani">Biryani & Rice</option>
+                          <option value="breads">Indian Breads</option>
+                          <option value="desserts">Desserts</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <Label>Description *</Label>
+                      <textarea
+                        value={newItemForm.description}
+                        onChange={(e) => setNewItemForm({ ...newItemForm, description: e.target.value })}
+                        placeholder="Brief description of the dish..."
+                        className="w-full mt-2 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        rows="2"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={newItemForm.is_veg}
+                            onChange={(e) => setNewItemForm({ ...newItemForm, is_veg: e.target.checked })}
+                          />
+                          Vegetarian
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={newItemForm.is_popular}
+                            onChange={(e) => setNewItemForm({ ...newItemForm, is_popular: e.target.checked })}
+                          />
+                          Popular
+                        </label>
+                      </div>
+                      <Button
+                        className="bg-green-600 hover:bg-green-700"
+                        onClick={handleCreateMenuItem}
+                        disabled={creatingMenuItem}
+                      >
+                        {creatingMenuItem ? 'Adding...' : 'Add Item'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-4">
                   {menuItems.length === 0 ? (
                     <p className="text-gray-500 text-center py-8">No menu items found</p>
@@ -1215,14 +1345,24 @@ const AdminDashboard = () => {
                               Popular
                             </label>
                           </div>
-                          <Button
-                            size="sm"
-                            className="bg-amber-600 hover:bg-amber-700"
-                            onClick={() => handleSaveMenuItem(item.id)}
-                            disabled={menuSavingId === item.id}
-                          >
-                            {menuSavingId === item.id ? 'Saving...' : 'Save'}
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-amber-600 hover:bg-amber-700"
+                              onClick={() => handleSaveMenuItem(item.id)}
+                              disabled={menuSavingId === item.id}
+                            >
+                              {menuSavingId === item.id ? 'Saving...' : 'Save'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteMenuItem(item.id)}
+                              disabled={deletingMenuId === item.id}
+                            >
+                              {deletingMenuId === item.id ? 'Deleting...' : 'Delete'}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))

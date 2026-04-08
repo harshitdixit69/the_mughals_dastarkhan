@@ -27,7 +27,13 @@ SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD', 'your-app-password')
 SENDER_NAME = "The Mughal's Dastarkhwan"
 
 # ============== CORS CONFIGURATION ==============
-CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
+_cors_env = os.environ.get('CORS_ORIGINS', '')
+CORS_ORIGINS = _cors_env.split(',') if _cors_env else [
+    "http://localhost:3000",
+    "http://localhost:8081",
+    "http://192.168.29.128:3000",
+    "http://192.168.29.128:8081",
+]
 
 # ============== PAYMENT GATEWAY (RAZORPAY) ==============
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '')

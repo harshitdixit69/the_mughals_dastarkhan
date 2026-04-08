@@ -64,6 +64,7 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
+    referral_code: Optional[str] = Field(None, max_length=20)
 
 
 class UserLogin(BaseModel):
@@ -83,6 +84,7 @@ class UserProfileUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     addresses: Optional[List[SavedAddress]] = None
+    whatsapp_notifications: Optional[bool] = None
 
 
 class UserResponse(BaseModel):
@@ -93,6 +95,9 @@ class UserResponse(BaseModel):
     role: Optional[str] = None
     favorite_items: List[int] = Field(default_factory=list)
     addresses: List[SavedAddress] = Field(default_factory=list)
+    referral_code: Optional[str] = None
+    referral_count: int = 0
+    whatsapp_notifications: bool = False
     created_at: datetime
 
 
@@ -201,6 +206,15 @@ class MenuItem(BaseModel):
     price: int
     description: str
     is_veg: bool
+    is_popular: bool = False
+
+
+class MenuItemCreate(BaseModel):
+    category_id: str
+    name: str = Field(..., min_length=2, max_length=100)
+    price: int = Field(..., ge=0)
+    description: str = Field(..., min_length=5, max_length=500)
+    is_veg: bool = False
     is_popular: bool = False
 
 

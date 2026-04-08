@@ -2,6 +2,8 @@
 Authentication routes - registration, login, profile
 """
 import uuid
+import random
+import string
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
@@ -14,6 +16,15 @@ from database import get_db, is_mongo_available
 
 logger = logging.getLogger(__name__)
 auth_router = APIRouter(prefix="/auth", tags=["authentication"])
+
+REFERRAL_REWARD = 100  # ₹100 off for both referrer and referee
+
+
+def generate_referral_code(name: str) -> str:
+    """Generate a unique referral code like MUGHAL-RAHUL-A3X7"""
+    clean = ''.join(c for c in name.upper().split()[0][:6] if c.isalpha())
+    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return f"MUGHAL-{clean}-{suffix}"
 
 
 @auth_router.post("/register", response_model=TokenResponse)
@@ -34,6 +45,7 @@ async def register(user_data: UserRegister):
         user_id = str(uuid.uuid4())
         password_hash = hash_password(user_data.password)
         created_at = datetime.now(timezone.utc)
+        referral_code = generate_referral_code(user_data.name)
         
         new_user = {
             'id': user_id,
@@ -43,15 +55,72 @@ async def register(user_data: UserRegister):
             'password_hash': password_hash,
             'favorite_items': [],
             'addresses': [],
+            'referral_code': referral_code,
+            'referred_by': None,
+            'referral_count': 0,
             'created_at': created_at.isoformat()
         }
         
+        # Handle referral code from inviter
+        referred_by_user = None
+        if user_data.referral_code:
+            ref_code = user_data.referral_code.strip().upper()
+            if is_mongo_available():
+                referred_by_user = await db.users.find_one({'referral_code': ref_code})
+            else:
+                from auth import users_store as _us
+                referred_by_user = next((u for u in _us if u.get('referral_code') == ref_code), None)
+            
+            if referred_by_user:
+                new_user['referred_by'] = referred_by_user['id']
+
         if is_mongo_available():
             db = get_db()
             await db.users.insert_one(new_user)
         else:
             add_to_users_store(new_user)
         
+        # Credit referral rewards
+        if referred_by_user and is_mongo_available():
+            # Credit referrer — create a coupon for them
+            referrer_coupon_code = f"REF-{referred_by_user['name'].split()[0].upper()[:6]}-{''.join(random.choices(string.digits, k=4))}"
+            referrer_coupon = {
+                'id': str(uuid.uuid4()),
+                'code': referrer_coupon_code,
+                'discount_type': 'fixed_amount',
+                'discount_value': REFERRAL_REWARD,
+                'min_order_amount': 200,
+                'max_uses': 1,
+                'current_uses': 0,
+                'is_active': True,
+                'expiry_date': None,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'note': f'Referral reward — {user_data.name} joined using your code'
+            }
+            await db.coupons.insert_one(referrer_coupon)
+            await db.users.update_one(
+                {'id': referred_by_user['id']},
+                {'$inc': {'referral_count': 1}}
+            )
+            
+            # Credit new user — create a welcome referral coupon
+            new_user_coupon_code = f"WELCOME-{user_data.name.split()[0].upper()[:6]}-{''.join(random.choices(string.digits, k=4))}"
+            new_user_coupon = {
+                'id': str(uuid.uuid4()),
+                'code': new_user_coupon_code,
+                'discount_type': 'fixed_amount',
+                'discount_value': REFERRAL_REWARD,
+                'min_order_amount': 200,
+                'max_uses': 1,
+                'current_uses': 0,
+                'is_active': True,
+                'expiry_date': None,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'note': f'Welcome reward — joined via referral from {referred_by_user["name"]}'
+            }
+            await db.coupons.insert_one(new_user_coupon)
+            logger.info(f"Referral reward: {referred_by_user['name']} gets {referrer_coupon_code}, {user_data.name} gets {new_user_coupon_code}")
+
         # Create token
         token = create_access_token(user_id, user_data.email)
         
@@ -66,6 +135,9 @@ async def register(user_data: UserRegister):
                 role=None,
                 favorite_items=[],
                 addresses=[],
+                referral_code=referral_code,
+                referral_count=0,
+                whatsapp_notifications=False,
                 created_at=created_at
             )
         )
@@ -107,6 +179,9 @@ async def login(user_data: UserLogin):
                 role=user.get('role'),
                 favorite_items=user.get('favorite_items', []),
                 addresses=user.get('addresses', []),
+                referral_code=user.get('referral_code'),
+                referral_count=user.get('referral_count', 0),
+                whatsapp_notifications=user.get('whatsapp_notifications', False),
                 created_at=created_at
             )
         )
@@ -132,6 +207,9 @@ async def get_profile(current_user: dict = Depends(get_current_user)):
         role=current_user.get('role'),
         favorite_items=current_user.get('favorite_items', []),
         addresses=current_user.get('addresses', []),
+        referral_code=current_user.get('referral_code'),
+        referral_count=current_user.get('referral_count', 0),
+        whatsapp_notifications=current_user.get('whatsapp_notifications', False),
         created_at=created_at
     )
 
@@ -145,6 +223,8 @@ async def update_profile(update_data: UserProfileUpdate, current_user: dict = De
             updates['name'] = update_data.name
         if update_data.phone is not None:
             updates['phone'] = update_data.phone
+        if update_data.whatsapp_notifications is not None:
+            updates['whatsapp_notifications'] = update_data.whatsapp_notifications
         if update_data.addresses is not None:
             import uuid as _uuid
             addresses_list = []
@@ -185,6 +265,9 @@ async def update_profile(update_data: UserProfileUpdate, current_user: dict = De
             role=updated_user.get('role'),
             favorite_items=updated_user.get('favorite_items', []),
             addresses=updated_user.get('addresses', []),
+            referral_code=updated_user.get('referral_code'),
+            referral_count=updated_user.get('referral_count', 0),
+            whatsapp_notifications=updated_user.get('whatsapp_notifications', False),
             created_at=created_at
         )
     except HTTPException:
